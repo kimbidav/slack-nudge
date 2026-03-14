@@ -2,7 +2,7 @@
 
 Daily scanner that identifies stale candidate submissions in Slack Connect channels and sends follow-up notifications via **Slack DM** and **email**.
 
-Works for any user — just enter your email on first run.
+Works for any user — teammates onboard via the web frontend.
 
 ## What it does
 
@@ -16,60 +16,74 @@ Works for any user — just enter your email on first run.
 5. Sends a **Slack DM** with clickable thread links
 6. Sends an **HTML email** with hyperlinked Slack threads
 
-## Setup
+## Architecture
 
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env
+```
+Lovable Frontend  ──▶  Railway API (FastAPI)  ──▶  Slack API
+                              │                       │
+                              ▼                       ▼
+                          Supabase              Gmail API
+                       (users, history)      (email notifications)
 ```
 
-Edit `.env` and add your `SLACK_BOT_TOKEN`. On first run, you'll be prompted for your email address.
+- **Frontend**: Lovable-hosted React app for onboarding + dashboard
+- **API**: FastAPI on Railway — runs nudge scans, manages schedules
+- **Scheduler**: APScheduler runs each user's daily scan at their chosen time
+- **Auth**: Single shared Slack user token scans on behalf of all users
 
-### Gmail setup (for email notifications)
+## API Endpoints
 
-1. Go to [console.cloud.google.com](https://console.cloud.google.com) → create a project
-2. Enable the **Gmail API**
-3. OAuth consent screen → add scope: `gmail.send`
-4. Credentials → Create OAuth 2.0 Client ID → **Desktop app** → Download JSON
-5. Save as `credentials.json` in the project root
-6. First run will open a browser for one-time authorization
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/users` | Register: validate email against Slack, save to DB |
+| GET | `/api/users/:email` | Get user settings |
+| PUT | `/api/users/:email/schedule` | Update daily schedule hour |
+| PUT | `/api/users/:email/toggle` | Pause/resume daily nudges |
+| POST | `/api/nudge/run` | Trigger a nudge check now |
+| GET | `/api/nudge/history/:email` | Recent nudge run results |
 
-## Usage
+## Deploy to Railway
+
+1. Create a Supabase project and run `supabase_schema.sql`
+2. Push this repo to GitHub
+3. Connect to Railway and set environment variables:
+
+```env
+SLACK_BOT_TOKEN=xoxp-...
+SUPABASE_URL=https://xxx.supabase.co
+SUPABASE_KEY=eyJ...
+GMAIL_CREDENTIALS_PATH=./credentials.json
+GMAIL_TOKEN_PATH=./gmail_token.json
+```
+
+Railway auto-detects the `Procfile` and deploys.
+
+## CLI Usage (local)
 
 ```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+
 # First run — prompts for your email, then scans
 python -m slack_nudge --dm-only
 
-# Pass email directly (skips onboarding)
+# Pass email directly
 python -m slack_nudge --email you@company.com --dm-only
 
-# Dry run (preview only, nothing sent)
+# Dry run (preview only)
 python -m slack_nudge --dm-only --dry-run
-
-# Full mode (thread replies + DM + email)
-python -m slack_nudge
 ```
-
-## Daily schedule (macOS launchd)
-
-```bash
-cp com.candidatelabs.nudge-check.plist ~/Library/LaunchAgents/
-launchctl load ~/Library/LaunchAgents/com.candidatelabs.nudge-check.plist
-```
-
-Runs weekdays at 8:00 AM. Logs to `./logs/nudge-check.log`.
 
 ## Configuration
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `SLACK_BOT_TOKEN` | *(required)* | Slack User OAuth Token (`xoxp-...`) |
-| `USER_EMAIL` | *(prompted)* | Your email — used to find your Slack user and send notifications |
+| `SUPABASE_URL` | *(required for API)* | Supabase project URL |
+| `SUPABASE_KEY` | *(required for API)* | Supabase anon key |
+| `USER_EMAIL` | *(prompted / via API)* | Your email for CLI mode |
 | `LOOKBACK_DAYS` | `60` | How far back to scan Slack |
 | `NUDGE_DAYS` | `3` | Days without emoji before flagging |
-| `NUDGE_DM_ONLY` | `false` | If true, skip thread replies |
-| `NUDGE_TRACKER_PATH` | `.nudge_tracker.json` | Nudge history file |
 | `GMAIL_CREDENTIALS_PATH` | `./credentials.json` | Google OAuth credentials |
 | `GMAIL_TOKEN_PATH` | `./gmail_token.json` | Cached Gmail token |
