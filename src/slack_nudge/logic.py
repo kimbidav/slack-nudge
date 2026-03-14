@@ -264,7 +264,7 @@ def infer_status_for_submission(
 def build_candidate_submissions(
     cfg: Config,
     slack: SlackAPI,
-    dk_user_id: str,
+    user_id: str,
     channels: List[Dict],
     now: Optional[datetime] = None,
 ) -> Tuple[List[CandidateSubmission], Dict[str, Any]]:
@@ -301,7 +301,7 @@ def build_candidate_submissions(
                 continue
             top_level_messages += 1
 
-            if msg.user != dk_user_id:
+            if msg.user != user_id:
                 continue
             dk_messages += 1
             

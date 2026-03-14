@@ -1,31 +1,31 @@
 # Slack Nudge
 
-Daily scanner that identifies stale candidate submissions in Slack and sends follow-up notifications via **Slack DM** and **email**.
+Daily scanner that identifies stale candidate submissions in Slack Connect channels and sends follow-up notifications via **Slack DM** and **email**.
+
+Works for any user — just enter your email on first run.
 
 ## What it does
 
-1. Scans all `candidatelabs-*` Slack channels for messages containing LinkedIn URLs (candidate submissions)
-2. Reads emoji reactions to understand status:
+1. Finds all **Slack Connect** (externally shared) channels you're a member of
+2. Scans for messages containing LinkedIn URLs (candidate submissions)
+3. Reads emoji reactions to understand status:
    - ✅ = in process (explicit)
    - ⛔ = closed / rejected
    - No emoji = unclear, may need follow-up
-3. Flags submissions that have been sitting for 3+ days without a ✅ or ⛔
-4. Sends a **Slack DM** with clickable thread links
-5. Sends an **HTML email** with hyperlinked Slack threads to the configured email address
+4. Flags submissions sitting for 3+ days without a ✅ or ⛔
+5. Sends a **Slack DM** with clickable thread links
+6. Sends an **HTML email** with hyperlinked Slack threads
 
 ## Setup
 
 ```bash
-cd ~/Desktop/slack-nudge
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-```
-
-Copy `.env.example` to `.env` and fill in your values:
-```bash
 cp .env.example .env
 ```
+
+Edit `.env` and add your `SLACK_BOT_TOKEN`. On first run, you'll be prompted for your email address.
 
 ### Gmail setup (for email notifications)
 
@@ -39,8 +39,11 @@ cp .env.example .env
 ## Usage
 
 ```bash
-# Run nudge check (DM-only mode)
+# First run — prompts for your email, then scans
 python -m slack_nudge --dm-only
+
+# Pass email directly (skips onboarding)
+python -m slack_nudge --email you@company.com --dm-only
 
 # Dry run (preview only, nothing sent)
 python -m slack_nudge --dm-only --dry-run
@@ -51,28 +54,19 @@ python -m slack_nudge
 
 ## Daily schedule (macOS launchd)
 
-A plist is provided to run the nudge check every weekday at 8:00 AM:
-
 ```bash
 cp com.candidatelabs.nudge-check.plist ~/Library/LaunchAgents/
 launchctl load ~/Library/LaunchAgents/com.candidatelabs.nudge-check.plist
 ```
 
-Manage:
-```bash
-launchctl list | grep candidatelabs         # Check status
-launchctl unload ~/Library/LaunchAgents/com.candidatelabs.nudge-check.plist  # Stop
-launchctl load ~/Library/LaunchAgents/com.candidatelabs.nudge-check.plist    # Start
-```
-
-Logs: `./logs/nudge-check.log`
+Runs weekdays at 8:00 AM. Logs to `./logs/nudge-check.log`.
 
 ## Configuration
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `SLACK_BOT_TOKEN` | *(required)* | Slack User OAuth Token (`xoxp-...`) |
-| `DK_EMAIL` | `dkimball@candidatelabs.com` | Email for Slack user lookup + email notifications |
+| `USER_EMAIL` | *(prompted)* | Your email — used to find your Slack user and send notifications |
 | `LOOKBACK_DAYS` | `60` | How far back to scan Slack |
 | `NUDGE_DAYS` | `3` | Days without emoji before flagging |
 | `NUDGE_DM_ONLY` | `false` | If true, skip thread replies |

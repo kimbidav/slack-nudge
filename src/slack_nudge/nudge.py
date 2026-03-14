@@ -156,7 +156,7 @@ def send_nudge(
     cfg: Config,
     submission: CandidateSubmission,
     tracker: NudgeTracker,
-    dk_user_id: str,
+    user_id: str,
 ) -> bool:
     """Send a nudge message to a submission thread.
     
@@ -166,7 +166,7 @@ def send_nudge(
     thread_ts = f"{submission.submitted_at.timestamp():.6f}"
     
     # Build the nudge message with user mention
-    message = f"autoreminder: check status -- <@{dk_user_id}> to check if any updates needed"
+    message = f"autoreminder: check status -- <@{user_id}> to check if any updates needed"
     
     # Post the reply
     result = slack.post_thread_reply(
@@ -215,22 +215,22 @@ def run_nudge_check(
     
     tracker = NudgeTracker(cfg.nudge_tracker_path)
     
-    # Get or look up DK's user ID
-    dk_user_id = cfg.dk_user_id
-    if not dk_user_id:
-        print(f"[INFO] Looking up user ID for {cfg.dk_email}...", flush=True)
-        dk_user_id = slack.get_user_id_by_email(cfg.dk_email)
-        print(f"[INFO] Found user ID: {dk_user_id}", flush=True)
-    
-    # Get candidate channels
-    print("[INFO] Fetching candidate channels...", flush=True)
-    channels = slack.list_candidate_channels_for_user(dk_user_id)
-    print(f"[INFO] Found {len(channels)} candidate channels", flush=True)
-    
+    # Get or look up user's Slack ID
+    user_id = cfg.user_slack_id
+    if not user_id:
+        print(f"[INFO] Looking up user ID for {cfg.user_email}...", flush=True)
+        user_id = slack.get_user_id_by_email(cfg.user_email)
+        print(f"[INFO] Found user ID: {user_id}", flush=True)
+
+    # Get Slack Connect channels
+    print("[INFO] Fetching Slack Connect channels...", flush=True)
+    channels = slack.list_connect_channels_for_user(user_id)
+    print(f"[INFO] Found {len(channels)} Slack Connect channels", flush=True)
+
     # Build submissions (this scans all channels - can take a while)
     print(f"[INFO] Scanning {len(channels)} channels for candidate submissions (this may take a few minutes)...", flush=True)
     submissions, debug_info = build_candidate_submissions(
-        cfg, slack, dk_user_id, channels
+        cfg, slack, user_id, channels
     )
     print(f"[INFO] Found {len(submissions)} total submissions", flush=True)
     
@@ -279,19 +279,19 @@ def run_nudge_check(
             print(f"[DM-ONLY] Marked nudge for {sub.candidate_name} in #{sub.channel_name}")
 
         if needing_nudge:
-            _send_nudge_summary_dm(slack, dk_user_id, needing_nudge)
+            _send_nudge_summary_dm(slack, user_id, needing_nudge)
             _send_nudge_summary_email(cfg, needing_nudge, slack)
     else:
         # Full mode: post thread replies + DM summary
         nudged_submissions = []
         for sub in needing_nudge:
-            if send_nudge(slack, cfg, sub, tracker, dk_user_id):
+            if send_nudge(slack, cfg, sub, tracker, user_id):
                 results["nudges_sent"] += 1
                 nudged_submissions.append(sub)
 
         # Send DM summary with links to all nudged threads
         if nudged_submissions:
-            _send_nudge_summary_dm(slack, dk_user_id, nudged_submissions)
+            _send_nudge_summary_dm(slack, user_id, nudged_submissions)
             _send_nudge_summary_email(cfg, nudged_submissions, slack)
 
     # Clean up old tracker records
@@ -304,10 +304,10 @@ def run_nudge_check(
 
 def _send_nudge_summary_dm(
     slack: SlackAPI,
-    dk_user_id: str,
+    user_id: str,
     submissions: List[CandidateSubmission],
 ) -> None:
-    """Send a DM to DK with links to all nudged threads."""
+    """Send a DM to the user with links to all nudged threads."""
     
     # Get workspace domain for building URLs
     domain = slack.get_workspace_domain()
@@ -326,7 +326,7 @@ def _send_nudge_summary_dm(
     
     message = "\n".join(lines)
     
-    result = slack.send_dm(dk_user_id, message)
+    result = slack.send_dm(user_id, message)
     if result:
         print(f"[INFO] Sent DM summary with {len(submissions)} nudge links", flush=True)
     else:
@@ -358,12 +358,12 @@ def _send_nudge_summary_email(
 
     try:
         send_email_via_gmail(
-            to=cfg.dk_email,
+            to=cfg.user_email,
             subject=subject,
             body=body,
             credentials_path=cfg.gmail_credentials_path,
             token_path=cfg.gmail_token_path,
         )
-        print(f"[INFO] Sent nudge summary email to {cfg.dk_email}", flush=True)
+        print(f"[INFO] Sent nudge summary email to {cfg.user_email}", flush=True)
     except Exception as e:
         print(f"[WARNING] Failed to send nudge email: {e}", flush=True)

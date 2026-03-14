@@ -65,11 +65,11 @@ class SlackAPI:
 
         raise RuntimeError(f"No Slack user found for email {email}")
 
-    def list_candidate_channels_for_user(self, user_id: str) -> List[Dict]:
-        """Return public/private channels whose name starts with 'candidatelabs-' and where user is a member.
-        
-        Uses users_conversations API which directly returns only channels the user is in - much faster
-        than listing all channels and checking membership for each one.
+    def list_connect_channels_for_user(self, user_id: str) -> List[Dict]:
+        """Return Slack Connect (externally shared) channels where user is a member.
+
+        Uses users_conversations API which returns only channels the user is in.
+        Filters to channels with is_ext_shared=True (Slack Connect channels).
         """
 
         channels: List[Dict] = []
@@ -77,7 +77,6 @@ class SlackAPI:
 
         while True:
             try:
-                # users_conversations returns only channels the user is a member of
                 resp = self.client.users_conversations(
                     user=user_id,
                     types="public_channel,private_channel",
@@ -88,8 +87,7 @@ class SlackAPI:
                 raise RuntimeError(f"Failed to list user channels: {e.response['error']}") from e
 
             for ch in resp.get("channels", []):
-                name = ch.get("name", "")
-                if name.startswith("candidatelabs-"):
+                if ch.get("is_ext_shared", False):
                     channels.append(ch)
 
             cursor = resp.get("response_metadata", {}).get("next_cursor") or None
