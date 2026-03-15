@@ -25,9 +25,13 @@ def start_scheduler():
 
     sched = _get_scheduler()
 
-    users = get_all_active_users()
-    for user in users:
-        _add_job(sched, user["email"], user["schedule_hour"])
+    try:
+        users = get_all_active_users()
+        for user in users:
+            _add_job(sched, user["email"], user["schedule_hour"])
+    except Exception as e:
+        users = []
+        print(f"[SCHEDULER] Could not load users from DB (will retry on first request): {e}")
 
     sched.start()
     print(f"[SCHEDULER] Started with {len(users)} active user(s)")
